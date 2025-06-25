@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Rastreador GPS com Bing Maps</title>
+    <style>
+        #map {
+            width: 100%;
+            height: 600px;
+        }
+
+        #infobox {
+            max-width: 280px; /* Define a largura máxima do infobox */
+            padding: 10px;
+            background-color: #ffffff;
+            border: 1px solid #ccc;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+
+    <script>
+        var map, pin, infobox;
+        var firstLocation = true;
+        var locationHistory = [];
+        var socket;
+
+        function initMap() {
+            map = new Microsoft.Maps.Map(document.getElementById('map'), {
+                credentials: 'Aj0F3zyFZrgdzKWlTPU40IOWaAI1s8I3PJi3zZEF0lXLgS3ZJq_sdKKtwy3CjM5U', // ATENÇÃO: Substitua pela sua chave!
+                center: new Microsoft.Maps.Location(-3.9883435829539502, -38.46293996223619),
+                zoom: 15
+            });
+
+            pin = new Microsoft.Maps.Pushpin(map.getCenter(), null);
+            map.entities.push(pin);
+
+            infobox = new Microsoft.Maps.Infobox(pin.getLocation(), {
+                visible: false
+            });
+            infobox.setMap(map);
+
+            connectWebSocket();
+        }
+
+        function connectWebSocket() {
+            socket = new WebSocket('wss://192.168.7.2:3001'); // ATENÇÃO: Verifique se o IP e porta estão corretos
+
+            socket.addEventListener('open', function() {
+                console.log('Conexão WebSocket estabelecida.');
+            });
+
+            socket.addEventListener('message', function(event) {
+                var locationData = JSON.parse(event.data);
+                var location = new Microsoft.Maps.Location(locationData.latitude, locationData.longitude);
+
+                if (firstLocation) {
+                    map.setView({ center: location });
+                    firstLocation = false;
+                }
+
+                locationHistory.push(location); // Adiciona a nova localização ao histórico
+
+                var polyline = new Microsoft.Maps.Polyline(locationHistory, null);
+                map.entities.push(polyline); // Adiciona o rastro da trilha no mapa
+
+                pin.setLocation(location);
+
+                if (map.getBounds().contains(location)) {
+                    map.setView({ center: location });
+                }
+
+                var infoContent = '<div id="infobox"><b>Última Localização:</b><br>' +
+                                  'Latitude: ' + locationData.latitude.toFixed(6) + '<br>' +
+                                  'Longitude: ' + locationData.longitude.toFixed(6) + '</div>';
+                infobox.setOptions({ visible: true, title: 'Localização Atual', description: infoContent });
+                infobox.setLocation(pin.getLocation());
+            });
+
+            // Fecha a conexão WebSocket ao sair da página
+            window.addEventListener('unload', function() {
+                if (socket) {
+                    socket.close();
+                }
+            });
+
+            // Fecha a conexão WebSocket antes de sair da página
+            window.addEventListener('beforeunload', function() {
+                if (socket) {
+                    socket.close();
+                }
+            });
+        }
+
+        (function() {
+            var script = document.createElement('script');
+            script.type = 'text/javascript';
+            script.src = 'https://www.bing.com/api/maps/mapcontrol?callback=initMap';
+            document.body.appendChild(script);
+        })();
+    </script>
+</body>
+</html>
